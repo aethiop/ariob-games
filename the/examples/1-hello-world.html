@@ -1,0 +1,10 @@
+<script class="SecureRender" src="../content.js">
+    // the.view = "Hello World!"
+    world = the.view.place({ fill: "Hello world!" })
+    hello = the.view.place({ fill: [0.8, 0.3, 0.3], size: [[100, '.'], [50, '.']] })
+    the.start = the.start || (async () => {
+        // hello.into()
+        world.into(hello)
+    })()
+    world.turn = [0.5]
+</script>

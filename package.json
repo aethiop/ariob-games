@@ -1,0 +1,41 @@
+{
+  "name": "joydb",
+  "version": "1.2.0",
+  "description": "JOY is a JavaScript framework for building user interfaces and progressive applications.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node start.js",
+    "dev": "vite",
+    "preview": "vite preview",
+    "build": "cat ./node_modules/gun/examples/jquery.js ./node_modules/gun/gun.js ./node_modules/gun/sea.js ./node_modules/gun/as.js > joy.min.js && cp ./node_modules/gun/examples/style.css ./joy.css",
+    "test": "mocha"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/eraeco/joydb.git"
+  },
+  "keywords": [
+    "joy",
+    "database",
+    "enterprise",
+    "decentralized",
+    "framework",
+    "p2p",
+    "blockchain",
+    "military",
+    "encryption",
+    "security"
+  ],
+  "author": "ERA",
+  "license": "zlib/MIT/Apache2",
+  "bugs": {
+    "url": "https://github.com/eraeco/joydb/issues"
+  },
+  "homepage": "https://github.com/eraeco/joydb#readme",
+  "dependencies": {
+    "gun": "~>0.2020.1232"
+  },
+  "devDependencies": {
+    "vite": "^3.1.0"
+  }
+}

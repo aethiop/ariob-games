@@ -1,0 +1,369 @@
+<script class="SecureRender" src="../content.js">
+    var chess = the.chess || (the.chess = {});
+
+    the.draw = function () {
+        var rows = chess.rows();
+        the.board = {}
+        the.game = the.view({ fill: [1, 1, 1], size: [[100, '%'], [100, '%']], }).into()
+        the.who = the.view({ size: [[2, "~"], [2, "~"]], grab: [0, -0.5] }).before(the.game)
+
+        b = the.view({ flow: ['v', '>'], turn: [2, 1, 0] }).into(the.game)
+
+        for (var i = 0; i < rows.length; i++) {
+            var row = the.view({ flow: ['>', 'v'] }).into(b)
+            for (var j = 0; j < 8; j++) {
+                var color = chess.colorize(i + j);
+                cell = the.view({ fill: color, size: [[2, '~'], [2, '~']] })
+                cell.into(row)
+                cell.name = chess.notation([8 - i, j + 1])
+                if (rows[i][j]) {
+                    var p = rows[i][j]
+                    p.view.into(cell);
+                }
+                the.board[cell.name] = cell;
+            }
+        }
+        the.prison = {}
+        the.prison.black = the.view({}).into()
+        the.prison.white = the.view({}).into()
+    }
+
+    the.start = the.start || (async () => {
+        chess.pieces = new Map();
+        chess.turn = "white";
+        chess.history = new Map();
+        chess.letter = { 'pawn': 'p', 'rook': 'r', 'bishop': 'b', 'knight': 'n', 'king': 'k', 'queen': 'q' }
+        chess.decimals = { king: 9812, queen: 9813, rook: 9814, bishop: 9815, knight: 9816, pawn: 9817 }
+        chess.colorize = (i) => { return i % 2 == 0 ? [0.7, 0.5, 0.3] : [0.9, 0.7, 0.4] }
+
+        chess.img = function (piece, color) {
+            var d = chess.decimals[piece],
+                e = color == "black" ? d + 6 : d;
+            return String.fromCodePoint(`&#${e};`.slice(2, -1));
+        }
+
+        chess.notation = (pos) => {
+            return String.fromCharCode(pos[1] + 96) + pos[0];
+        };
+
+        chess.position = (notation) => {
+            var x = parseInt(notation.slice(1)),
+                y = notation.slice(0, 1).charCodeAt(0) - 96;
+            return [x, y];
+        };
+
+        chess.piece = (type, color, place, view) => {
+            return { type, color, place, view }; // TODO: Remove view
+        };
+
+        chess.move = function (start, end) {
+            var s = chess.notation(start), e = chess.notation(end);
+            var moved = chess.pieces.get(s);
+            moved.place = end;
+            chess.pieces.set(e, moved);
+            chess.pieces.delete(s);
+            chess.history.set(chess.full, [start, end]);
+            chess.turn = chess.turn === "white" ? "black" : "white";
+            return true;
+        };
+
+
+        chess.legal = function (start, end) {
+            var s = chess.notation(start), e = chess.notation(end);
+            var moved = chess.pieces.get(s);
+            if (moved === undefined) return false;
+            var possible = chess.possible(start);
+            if (possible.includes(e)) return true;
+            return false;
+        };
+
+        chess.capture = function (start, end) {
+            var s = chess.notation(start), e = chess.notation(end);
+            chess.pieces.delete(e);
+            chess.pieces.set(e, chess.pieces.get(s));
+            chess.pieces.delete(s);
+            chess.turn = chess.turn === "white" ? "black" : "white";
+        };
+
+        chess.getFEN = function () {
+            var fen = "";
+            var rows = chess.rows();
+            for (var i = 0; i < rows.length; i++) {
+                var emp = 0; //empty counter
+                for (var j = 0; j < rows[i].length; j++) {
+                    var piece = rows[i][j];
+                    if (!piece) {
+                        emp++;
+                    } else {
+                        if (emp > 0) { fen += emp; }
+                        var letter = chess.letter[piece.type]
+                        fen +=
+                            piece.color === "white" ? letter.toUpperCase() : letter.toLowerCase();
+                        emp = 0;
+                    }
+                }
+                if (emp > 0) { fen += emp; }
+                if (i < rows.length - 1) { fen += "/"; }
+            }
+
+            fen += " " + chess.turn.charAt(0) + " ";
+            fen += chess.wkca ? "K" : "";
+            fen += chess.wqca ? "Q" : "";
+            fen += chess.bkca ? "k" : "";
+            fen += chess.bqca ? "q" : "";
+            if (!chess.wkca && !chess.wqca && !chess.bkca && !chess.bqca) {
+                fen += "-";
+            }
+            fen += chess.enpassant ? " " + chess.enPassant : " -";
+            return fen;
+        };
+
+        chess.rows = function () {
+            var rows = [[], [], [], [], [], [], [], []];
+            chess.pieces.forEach(function (piece, square) {
+                square = chess.position(square);
+                var i = 7 - square[0] + 1, j = square[1] - 1
+                rows[i][j] = piece;
+            });
+            return rows;
+        };
+
+        chess.possible = function (square) {
+            var possible = [];
+            var piece = chess.pieces.get(chess.notation(square));
+            if (piece) { possible = chess[piece.type](square) }
+            return possible;
+        };
+        chess.offset = function (square, offsets) {
+            console.log(offsets)
+            var possible = []
+            var moved = chess.pieces.get(chess.notation(square))
+            for (var i = 0; i < offsets.length; i++) {
+                var row = square[0] + offsets[i][0];
+                var col = square[1] + offsets[i][1];
+                var to = chess.pieces.get(chess.notation([row, col]))
+                if (row >= 1 && row <= 8 && col >= 1 && col <= 8 && !chess.pieces.has(chess.notation([row, col]))) {
+                    possible.push([row, col]);
+                }
+                if (row >= 1 && row <= 8 && col >= 1 && col <= 8 && chess.pieces.has(chess.notation([row, col])) && moved.color !== to.color) {
+                    possible.push([row, col]);
+                }
+            }
+            return possible
+        }
+        chess.pawn = function (square) {
+            var possible = [];
+            var pawn = chess.pieces.get(chess.notation(square));
+            var direction = pawn.color === "white" ? 1 : -1;
+            var forward = [square[0] + direction, square[1]];
+            var left = [square[0] + direction, square[1] - 1];
+            var right = [square[0] + direction, square[1] + 1];
+            if (!chess.pieces.has(chess.notation(forward))) {
+                possible.push(forward);
+            }
+            if (chess.pieces.has(chess.notation(left)) && chess.pieces.get(chess.notation(left)).color !== pawn.color) {
+                possible.push(left);
+            }
+            if (chess.pieces.has(chess.notation(right)) && chess.pieces.get(chess.notation(right)).color !== pawn.color) {
+                possible.push(right);
+            }
+            return possible;
+        };
+
+        chess.knight = function (start) {
+            var possible = [];
+            for (var dx = -2; dx <= 2; dx++) {
+                for (var dy = -2; dy <= 2; dy++) {
+                    if (Math.abs(dx) + Math.abs(dy) === 3) {
+                        var end = [start[0] + dy, start[1] + dx];
+                        if (end[0] >= 1 && end[0] <= 8 && end[1] >= 1 && end[1] <= 8) {
+                            var moved = chess.pieces.get(chess.notation(start));
+                            var endPiece = chess.pieces.get(chess.notation(end));
+                            if (endPiece === undefined || endPiece.color !== moved.color && !chess.pieces.has(chess.notation(end))) {
+                                possible.push(end);
+                            }
+                            if (chess.pieces.has(chess.notation(end)) && endPiece.color !== moved.color) {
+                                possible.push(end);
+                            }
+                        }
+                    }
+                }
+            }
+            return possible;
+        };
+
+        chess.rook = function (start) {
+            var possible = [];
+            for (var dx = -1; dx <= 1; dx++) {
+                for (var dy = -1; dy <= 1; dy++) {
+                    if (dx === 0 || dy === 0) {
+                        var end = [start[0] + dy, start[1] + dx];
+                        while (end[0] >= 1 && end[0] <= 8 && end[1] >= 1 && end[1] <= 8) {
+                            var moved = chess.pieces.get(chess.notation(start));
+                            var endPiece = chess.pieces.get(chess.notation(end));
+                            if (endPiece === undefined || endPiece.color !== moved.color && !chess.pieces.has(chess.notation(end))) {
+                                possible.push(end);
+                            } else if (endPiece !== undefined && chess.pieces.has(chess.notation(end)) && endPiece.color !== moved.color) {
+                                possible.push(end);
+                                break
+                            } else {
+                                break;
+                            }
+                            end = [end[0] + dy, end[1] + dx];
+                        }
+                    }
+                }
+            }
+            return possible;
+        };
+
+        chess.bishop = function (square) { return chess.offset(square, [[-2, -2], [-2, 2], [2, -2], [2, 2]]); };
+        chess.queen = function (square) { return chess.offset(square, [[-1, -1], [-1, 1], [1, -1], [1, 1]]); };
+        chess.king = function (square) { return chess.offset(square, [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]]); };
+        chess.check = function (turn) {
+            // Get the king square
+            var king = Array.from(chess.pieces).filter((v) => v[1].type === 'king' && v[1].color === turn)[0];
+            chess.pieces.forEach((v, k) => {
+                // console.log(k, v)
+                if (v.color === turn) return;
+                // console.log(v)
+                var possible = chess.possible(chess.position(k))
+                // console.log(k, v)
+
+            })
+            //      Check if any possible moves can capture the king
+            return false;
+        }
+
+        chess.checkmate = function (turn) {
+            // Check if the king is in check
+            if (!chess.check(turn)) return;
+
+            // Iterate over each of the pieces
+            //      Check if any of the possible moves gets the king out of check
+            //      Check if the king is still in check
+            //      If not in check undo the move and return false
+            //      Undo the move
+            return true;
+        }
+
+        chess.parseFEN = function (fen) {
+            var parts = fen.split(" ");
+            var rows = parts[0].split("/");
+            for (var i = 0; i < 8; i++) {
+                var col = 0;
+                for (var j = 0; j < rows[i].length; j++) {
+                    var c = rows[i][j];
+                    if (c >= "1" && c <= "8") {
+                        col += parseInt(c);
+                    } else {
+                        var color = c.toLowerCase() === c ? "black" : "white";
+                        var type = c.toLowerCase();
+                        if (type === "p") { type = "pawn"; }
+                        else if (type === "n") { type = "knight"; }
+                        else if (type === "b") { type = "bishop"; }
+                        else if (type === "r") { type = "rook"; }
+                        else if (type === "q") { type = "queen"; }
+                        else if (type === "k") { type = "king"; }
+                        chess.pieces.set(
+                            chess.notation([8 - i, col + 1]),
+                            chess.piece(type, color, [8 - i, col + 1], the.view({ fill: chess.img(type, color) })) // TODO: view only in SR
+                        );
+                        col++;
+                    }
+                }
+            }
+            chess.turn = parts[1] == "b" ? "black" : "white";
+        };
+
+        // SR ONLY
+        chess.hinted = []
+        chess.hint = function (places, v) {
+            places.forEach((place) => {
+                chess.hinted.push(place)
+                var notation = chess.notation(place);
+                var pos = the.board[notation].fill;
+                the.board[notation].fill = [pos[0], pos[1], pos[2], v]
+            })
+        }
+        chess.on = []
+        chess.select = function (on) {
+            on = chess.notation(on)
+            var color = the.board[on].fill
+            the.board[on].fill = [color[0], color[1], color[2], 0.4]
+            chess.on.push(on)
+        }
+        chess.hide = function () {
+            chess.hinted.forEach(place => {
+                var notation = chess.notation(place);
+                var pos = the.board[notation].fill;
+                the.board[notation].fill = [pos[0], pos[1], pos[2], 1]
+            })
+        }
+        chess.free = function () {
+            // console.log("Free")
+            chess.on.forEach(on => {
+                var color = the.board[on].fill
+                the.board[on].fill = [color[0], color[1], color[2], 1]
+            })
+
+        }
+
+        chess.parseFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w");
+        the.draw()
+    })()
+
+    var on = the.aim.look ? the.aim.look[0] : '';
+    var h = on?.length > 2 ? the.aim.look[1] : null
+    the.who.fill = chess.turn === "white" ? "ነጭ" : "ጥቁር"
+    if (h && h?.length == 2) {
+        console.log(h)
+        var square = chess.position(h), who = chess.pieces.get(h) || null;
+        if (!chess.lock && the.tap?.down) {
+            if (who && who.color == chess.turn) {
+                chess.lock = square;
+            }
+        }
+    }
+
+    // console.log(chess.check())
+    console.log("KING: ", chess.check(chess.turn))
+    if (the.tap?.down) {
+        if (chess.prev && h !== chess.notation(chess.prev)) {
+            chess.hide()
+            chess.free()
+        }
+
+        var capture = chess.selected ? chess.pieces.get(h) : null;
+        var current = chess.selected ? chess.pieces.get(chess.notation(chess.selected.is)) : null
+        if (current && capture && current.color !== capture.color && chess.selected.possible.includes(h)) {
+            capture.view.into(the.prison[capture.color])
+            chess.capture(chess.selected.is, chess.position(h))
+            current.view.into(the.board[h])
+        }
+    }
+
+    if (chess.selected) {
+        var { is, possible } = chess.selected,
+            where = chess.notation(is),
+            who = chess.pieces.get(where);
+        if (possible.includes(on)) {
+            if (the?.tap?.down) {
+                chess.move(is, chess.position(on))
+                who.view.into(the.board[on])
+                chess.selected = null
+            }
+        }
+    }
+
+    if (chess.lock) {
+        var possible = chess.possible(chess.lock);
+        var prevMoves = chess.prev ? chess.possible(chess.prev) : [];
+        chess.hint(possible, 0.5)
+        chess.select(chess.lock)
+        chess.prev = chess.lock;
+        chess.selected = { is: chess.lock, possible: possible.map(chess.notation) };
+        chess.lock = null;
+        the.tap = undefined;
+    }
+</script>
